@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SYS-CALC v1.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="crt">
+  <div class="scanlines"></div>
+  <div class="vignette"></div>
+  <div class="flicker"></div>
+  <div class="glow"></div>
+
+  <div id="boot-screen" class="boot-screen">
+    <div id="boot-prompt" class="boot-prompt">&gt; PRESS ANY KEY TO BOOT_</div>
+    <pre id="boot-log" class="boot-log"></pre>
+  </div>
+
+  <div id="calculator" class="calculator hidden">
+    <div class="display-wrap">
+      <div class="hex-display">
+        <div class="display-label">SYS-CALC v1.0 :: UPLINK OK</div>
+        <div id="history" class="history"></div>
+        <div id="current" class="current">0</div>
+      </div>
+    </div>
+
+    <div class="keypad">
+      <div class="hex-row">
+        <button class="hex fn" data-key="C">C</button>
+        <div class="hex status" aria-hidden="true">
+          <div class="status-dot"></div>
+          <div class="status-label">PWR</div>
+        </div>
+        <button class="hex fn" data-key="Backspace">&#9003;</button>
+      </div>
+      <div class="hex-row">
+        <button class="hex" data-key="7">7</button>
+        <button class="hex" data-key="8">8</button>
+        <button class="hex" data-key="9">9</button>
+        <button class="hex op" data-key="/">&divide;</button>
+      </div>
+      <div class="hex-row">
+        <button class="hex" data-key="4">4</button>
+        <button class="hex" data-key="5">5</button>
+        <button class="hex" data-key="6">6</button>
+        <button class="hex op" data-key="*">&times;</button>
+        <button class="hex op" data-key="-">&minus;</button>
+      </div>
+      <div class="hex-row">
+        <button class="hex" data-key="1">1</button>
+        <button class="hex" data-key="2">2</button>
+        <button class="hex" data-key="3">3</button>
+        <button class="hex op" data-key="+">+</button>
+      </div>
+      <div class="hex-row">
+        <button class="hex" data-key="0">0</button>
+        <button class="hex" data-key=".">.</button>
+        <button class="hex op equals" data-key="=">=</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
