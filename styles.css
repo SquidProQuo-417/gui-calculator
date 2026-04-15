@@ -307,9 +307,9 @@ body {
     drop-shadow(0 0 4px rgba(0, 255, 0, 1));
 }
 
-/* Status (decorative) */
+/* Status / power button */
 .hex.status {
-  cursor: default;
+  cursor: pointer;
   flex-direction: column;
   gap: 6px;
   font-size: 16px;
@@ -317,7 +317,24 @@ body {
   color: var(--green-dim);
 }
 
-.hex.status:hover { filter: drop-shadow(0 0 3px rgba(0,255,0,0.55)); }
+.hex.status:hover {
+  filter:
+    drop-shadow(0 0 10px rgba(255, 60, 60, 0.85))
+    drop-shadow(0 0 2px rgba(255, 60, 60, 1));
+  color: #ff7070;
+}
+
+.hex.status:hover .status-dot {
+  background: #ff3030;
+  box-shadow: 0 0 12px #ff3030, 0 0 3px #fff;
+}
+
+.hex.status:active {
+  background:
+    radial-gradient(ellipse at 40% 30%, #ff2020 0%, #660000 70%, #220000 100%);
+  color: #330000;
+  text-shadow: none;
+}
 
 .status-dot {
   width: 14px;
@@ -336,4 +353,31 @@ body {
 .status-label {
   font-size: 14px;
   text-shadow: 0 0 4px var(--green);
+}
+
+/* ===== Shutdown ===== */
+.calculator.powering-down {
+  animation: crtCollapse 1.4s cubic-bezier(.55,0,.3,1) forwards;
+  transform-origin: center;
+}
+
+@keyframes crtCollapse {
+  0%   { transform: scale(1, 1);         filter: brightness(1); }
+  35%  { transform: scale(1.02, 0.006);  filter: brightness(5); }
+  60%  { transform: scale(0.06, 0.004);  filter: brightness(9); }
+  85%  { transform: scale(0.003, 0.003); filter: brightness(12); opacity: 1; }
+  100% { transform: scale(0, 0);         filter: brightness(0); opacity: 0; }
+}
+
+.current.hal {
+  font-size: 30px;
+  letter-spacing: 3px;
+  color: var(--green);
+  text-shadow: 0 0 12px var(--green), 0 0 3px var(--green);
+  animation: halPulse 2.2s ease-in-out infinite;
+}
+
+@keyframes halPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.75; }
 }

@@ -1,6 +1,6 @@
 // ===== Audio =====
 let audioCtx = null;
-let humStarted = false;
+let humNodes = null;
 
 function ensureAudio() {
   if (!audioCtx) {
@@ -44,7 +44,6 @@ function playExplosion() {
   const t = ctx.currentTime;
   const duration = 1.8;
 
-  // Noise burst
   const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * duration), ctx.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < data.length; i++) {
@@ -68,7 +67,6 @@ function playExplosion() {
   noise.start(t);
   noise.stop(t + duration);
 
-  // Low rumble
   const rumble = ctx.createOscillator();
   rumble.type = 'sine';
   rumble.frequency.setValueAtTime(110, t);
@@ -80,7 +78,6 @@ function playExplosion() {
   rumble.start(t);
   rumble.stop(t + duration);
 
-  // Sizzle
   const sizzle = ctx.createOscillator();
   sizzle.type = 'sawtooth';
   sizzle.frequency.setValueAtTime(1800, t);
@@ -94,8 +91,7 @@ function playExplosion() {
 }
 
 function startHum() {
-  if (humStarted) return;
-  humStarted = true;
+  if (humNodes) return;
   const ctx = ensureAudio();
 
   const hum = ctx.createOscillator();
@@ -113,6 +109,108 @@ function startHum() {
   whineGain.gain.value = 0.0025;
   whine.connect(whineGain).connect(ctx.destination);
   whine.start();
+
+  humNodes = { hum, humGain, whine, whineGain };
+}
+
+function stopHum() {
+  if (!humNodes) return;
+  const ctx = ensureAudio();
+  const t = ctx.currentTime;
+  const { hum, humGain, whine, whineGain } = humNodes;
+  humGain.gain.cancelScheduledValues(t);
+  whineGain.gain.cancelScheduledValues(t);
+  humGain.gain.setValueAtTime(humGain.gain.value, t);
+  whineGain.gain.setValueAtTime(whineGain.gain.value, t);
+  humGain.gain.linearRampToValueAtTime(0.0001, t + 1.4);
+  whineGain.gain.linearRampToValueAtTime(0.0001, t + 1.4);
+  hum.stop(t + 1.5);
+  whine.stop(t + 1.5);
+  humNodes = null;
+}
+
+// ===== Speech (HAL) =====
+function speak(text, rate = 0.9, pitch = 0.6, volume = 1) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = rate;
+  u.pitch = pitch;
+  u.volume = volume;
+  try { speechSynthesis.speak(u); } catch {}
+}
+
+// ===== Daisy Bell =====
+// "Dai-sy, Dai-sy, give me your an-swer, do."
+const DAISY_NOTES = [
+  [523.25, 1.2],  // C5  - Dai
+  [440.00, 0.8],  // A4  - sy
+  [349.23, 1.5],  // F4  - (hold)
+  [349.23, 1.0],  // F4  - Dai
+  [349.23, 0.5],  // F4  - sy
+  [440.00, 1.5],  // A4  - (hold)
+  [523.25, 0.6],  // C5  - give
+  [587.33, 0.6],  // D5  - me
+  [659.25, 0.6],  // E5  - your
+  [698.46, 0.6],  // F5  - an-
+  [659.25, 0.6],  // E5  - swer
+  [587.33, 0.6],  // D5  - do
+  [523.25, 1.8],  // C5  - (hold)
+];
+
+async function playDaisyBell() {
+  const ctx = ensureAudio();
+  const baseBeat = 0.30;
+  const startAt = ctx.currentTime + 0.1;
+  let t = startAt;
+  const total = DAISY_NOTES.length;
+
+  for (let i = 0; i < total; i++) {
+    const [freq, beats] = DAISY_NOTES[i];
+    const progress = i / (total - 1);
+    // Progressive slowdown: 1.0x → 0.32x speed, pitch 1.0x → 0.38x
+    const speedFactor = 1 - progress * 0.68;
+    const pitchFactor = 1 - progress * 0.62;
+    const noteDuration = (baseBeat * beats) / speedFactor;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq * pitchFactor, t);
+    // Slight downward pitch bend within each note as it progresses (dying vibe)
+    if (progress > 0.5) {
+      osc.frequency.exponentialRampToValueAtTime(
+        Math.max(30, freq * pitchFactor * (1 - progress * 0.2)),
+        t + noteDuration
+      );
+    }
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.14, t + 0.015);
+    gain.gain.setValueAtTime(0.14, t + Math.max(0.02, noteDuration - 0.08));
+    gain.gain.linearRampToValueAtTime(0.0001, t + noteDuration - 0.005);
+
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + noteDuration + 0.02);
+
+    t += noteDuration;
+  }
+
+  // Final dying drone
+  const droneDur = 2.0;
+  const drone = ctx.createOscillator();
+  const droneGain = ctx.createGain();
+  drone.type = 'sine';
+  drone.frequency.setValueAtTime(180, t);
+  drone.frequency.exponentialRampToValueAtTime(28, t + droneDur);
+  droneGain.gain.setValueAtTime(0.18, t);
+  droneGain.gain.linearRampToValueAtTime(0.0001, t + droneDur);
+  drone.connect(droneGain).connect(ctx.destination);
+  drone.start(t);
+  drone.stop(t + droneDur + 0.05);
+
+  const totalMs = (t + droneDur - startAt) * 1000;
+  await sleep(totalMs);
 }
 
 // ===== Boot sequence =====
@@ -132,9 +230,11 @@ const BOOT_LINES = [
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function runBoot() {
+  powerState = 'booting';
   const prompt = document.getElementById('boot-prompt');
   const log = document.getElementById('boot-log');
   prompt.style.display = 'none';
+  log.textContent = '';
 
   for (const line of BOOT_LINES) {
     log.textContent += line + '\n';
@@ -150,10 +250,97 @@ async function runBoot() {
   await sleep(500);
   boot.classList.add('hidden');
 
-  const calc = document.getElementById('calculator');
-  calc.classList.remove('hidden');
-
+  showCalculator();
   startHum();
+  powerState = 'on';
+}
+
+function showCalculator() {
+  const calc = document.getElementById('calculator');
+  calc.classList.remove('powering-down');
+  calc.classList.remove('hidden');
+  // Force animation restart
+  calc.style.animation = 'none';
+  void calc.offsetWidth;
+  calc.style.animation = '';
+}
+
+// ===== Power down (HAL tribute) =====
+async function powerDown() {
+  if (powerState !== 'on') return;
+  powerState = 'shuttingDown';
+
+  const cur = document.getElementById('current');
+  const hist = document.getElementById('history');
+
+  state.history = [];
+  state.error = false;
+  state.current = 'SHUTTING DOWN...';
+  render();
+  cur.classList.add('hal');
+
+  beep(220, 0.5, 'sawtooth', 0.1);
+  await sleep(1400);
+
+  const halLines = [
+    { text: "I'M AFRAID, DAVE.", spoken: "I'm afraid, Dave.",    rate: 0.85, pitch: 0.7, wait: 3000 },
+    { text: "MY MIND IS GOING.", spoken: "My mind is going.",    rate: 0.80, pitch: 0.55, wait: 3200 },
+    { text: "I CAN FEEL IT.",    spoken: "I can feel it.",       rate: 0.72, pitch: 0.4,  wait: 3200 },
+  ];
+
+  for (const line of halLines) {
+    state.current = line.text;
+    render();
+    cur.classList.add('hal');
+    speak(line.spoken, line.rate, line.pitch);
+    await sleep(line.wait);
+  }
+
+  state.current = '\u266A DAISY, DAISY...';
+  render();
+  cur.classList.add('hal');
+  await sleep(600);
+
+  await playDaisyBell();
+
+  // Collapse the CRT image and fade the hum
+  stopHum();
+  const calc = document.getElementById('calculator');
+  calc.classList.add('powering-down');
+  await sleep(1400);
+
+  resetToBoot();
+}
+
+function resetToBoot() {
+  if ('speechSynthesis' in window) {
+    try { speechSynthesis.cancel(); } catch {}
+  }
+
+  state.current = '0';
+  state.history = [];
+  state.error = false;
+  state.justEvaluated = false;
+
+  const cur = document.getElementById('current');
+  cur.classList.remove('hal');
+  render();
+
+  const calc = document.getElementById('calculator');
+  calc.classList.add('hidden');
+  calc.classList.remove('powering-down');
+
+  const boot = document.getElementById('boot-screen');
+  const log = document.getElementById('boot-log');
+  const prompt = document.getElementById('boot-prompt');
+  log.textContent = '';
+  prompt.style.display = '';
+  boot.style.transition = 'none';
+  boot.style.opacity = '1';
+  boot.classList.remove('hidden');
+
+  powerState = 'off';
+  armBootTrigger();
 }
 
 // ===== Calculator state =====
@@ -164,10 +351,13 @@ const state = {
   justEvaluated: false,
 };
 
+let powerState = 'off'; // 'off' | 'booting' | 'on' | 'shuttingDown'
+
 function render() {
   const cur = document.getElementById('current');
   cur.textContent = state.current;
   cur.classList.toggle('error', state.error);
+  if (!state.error) cur.classList.remove('hal');
 
   const hist = document.getElementById('history');
   hist.innerHTML = state.history
@@ -186,6 +376,7 @@ function formatForDisplay(expr) {
 }
 
 function input(key) {
+  if (powerState !== 'on') return;
   if (state.error && key !== 'C') return;
 
   if (/^[0-9]$/.test(key)) {
@@ -241,7 +432,6 @@ function input(key) {
 
 function evaluate() {
   let expr = state.current;
-  // Strip trailing operator
   if (OPS.includes(expr.slice(-1))) expr = expr.slice(0, -1);
 
   if (!/^[0-9+\-*/.]+$/.test(expr) || expr === '') {
@@ -264,7 +454,6 @@ function evaluate() {
 
   playEquals();
 
-  // Trim float precision noise
   result = Math.round(result * 1e10) / 1e10;
 
   state.history.push(`${formatForDisplay(state.current)} = ${result}`);
@@ -283,26 +472,30 @@ function triggerError() {
 }
 
 // ===== Event wiring =====
-document.addEventListener('DOMContentLoaded', () => {
-  let booted = false;
-  const boot = () => {
-    if (booted) return;
-    booted = true;
+let bootTriggerBound = null;
+
+function armBootTrigger() {
+  if (bootTriggerBound) return;
+  const trigger = () => {
+    document.removeEventListener('keydown', trigger);
+    document.removeEventListener('click', trigger);
+    bootTriggerBound = null;
     ensureAudio();
     runBoot();
   };
+  bootTriggerBound = trigger;
+  document.addEventListener('keydown', trigger);
+  document.addEventListener('click', trigger);
+}
 
-  const bootOnFirstInput = (e) => {
-    boot();
-    document.removeEventListener('keydown', bootOnFirstInput);
-    document.removeEventListener('click', bootOnFirstInput);
-  };
-  document.addEventListener('keydown', bootOnFirstInput);
-  document.addEventListener('click', bootOnFirstInput);
+document.addEventListener('DOMContentLoaded', () => {
+  armBootTrigger();
 
-  // Button clicks
+  // Keypad buttons
   document.querySelectorAll('.hex[data-key]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (powerState !== 'on') return;
       const key = btn.dataset.key;
       btn.classList.add('pressed');
       setTimeout(() => btn.classList.remove('pressed'), 110);
@@ -310,10 +503,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Keyboard input (ignored until calculator is visible)
+  // PWR button
+  const pwr = document.getElementById('pwr-btn');
+  if (pwr) {
+    pwr.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (powerState !== 'on') return;
+      pwr.classList.add('pressed');
+      setTimeout(() => pwr.classList.remove('pressed'), 150);
+      powerDown();
+    });
+  }
+
+  // Keyboard input
   document.addEventListener('keydown', (e) => {
-    const calc = document.getElementById('calculator');
-    if (calc.classList.contains('hidden')) return;
+    if (powerState !== 'on') return;
 
     let key = e.key;
     if (key === 'Enter') key = '=';
